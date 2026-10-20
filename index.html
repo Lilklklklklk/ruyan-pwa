@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>如烟 · 云脑</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<script src="config.js"></script>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--bubble-me:#1e4f8a;--bubble-ai:#20242e;--text:#e8eaf0;--dim:#8b93a3;--accent:#4f9cf9}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;height:100dvh;display:flex;flex-direction:column;max-width:720px;margin:0 auto}
+header{padding:12px 16px;background:var(--panel);display:flex;align-items:center;gap:8px;border-bottom:1px solid #262b36}
+header .dot{width:10px;height:10px;border-radius:50%;background:#34c759;flex-shrink:0}
+header h1{font-size:17px;font-weight:600}
+header span{font-size:12px;color:var(--dim)}
+#chat{flex:1;overflow-y:auto;padding:16px 12px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:85%;padding:10px 14px;border-radius:14px;line-height:1.6;font-size:15px;white-space:pre-wrap;word-break:break-word}
+.msg.me{align-self:flex-end;background:var(--bubble-me);border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:var(--bubble-ai);border-bottom-left-radius:4px}
+.msg.ai .tag{display:block;font-size:11px;color:var(--accent);margin-bottom:2px}
+.msg .hint{display:block;margin-top:6px;font-size:12px;color:var(--dim)}
+#welcome{align-self:center;color:var(--dim);font-size:13px;text-align:center;line-height:1.8;margin-top:24px}
+#inputbar{background:var(--panel);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:flex-end;border-top:1px solid #262b36}
+#inputbar textarea{flex:1;background:#11141a;border:1px solid #2b3140;border-radius:12px;color:var(--text);font-size:15px;padding:10px 12px;resize:none;max-height:120px;outline:none;font-family:inherit}
+#inputbar button{background:#232838;border:none;color:var(--text);font-size:20px;width:42px;height:42px;border-radius:12px;flex-shrink:0;cursor:pointer}
+#inputbar button.send{background:var(--accent);color:#fff;width:auto;padding:0 18px;font-size:15px}
+#inputbar button:active{opacity:.7}
+#filetag{display:none;margin:0 12px;padding:8px 10px;background:#1a2030;border:1px dashed #3a4767;border-radius:10px;font-size:13px;color:var(--dim)}
+</style>
+</head>
+<body>
+<header><div class="dot"></div><h1>如烟</h1><span>云脑 · 随手记入库</span></header>
+<div id="filetag"></div>
+<div id="chat">
+  <div id="welcome">我是如烟 ☁️<br>随手记点什么:打字 / 传图 / 贴链接<br>说「记一下这顿饭/这篇游记」我会自动入库建链<br><br>· 已支持:文字、链接、图片(记文件名,请补一句口述)<br>· 待支持:语音转写、大文件原图</div>
+</div>
+<div id="inputbar">
+  <button id="btnImg" title="传图片">📎</button>
+  <button id="btnVoice" title="语音输入">🎤</button>
+  <textarea id="input" rows="1" placeholder="说点什么,或直接「入库:…」"></textarea>
+  <button class="send" id="btnSend">发送</button>
+</div>
+<input type="file" id="file" accept="image/*" style="display:none">
+<script>
+const chat=document.getElementById('chat'),input=document.getElementById('input'),filetag=document.getElementById('filetag');
+const API=(window.RUYAN_API||'/api/chat');
+let pendingFiles=[];
+
+function addMsg(text,who,tag){
+  const d=document.createElement('div');d.className='msg '+who;
+  if(tag){const t=document.createElement('span');t.className='tag';t.textContent=tag;d.appendChild(t);}
+  const t=document.createElement('span');t.textContent=text;d.appendChild(t);
+  chat.appendChild(d);chat.scrollTop=chat.scrollHeight;return d;
+}
+function addHint(d,hint){const h=document.createElement('span');h.className='hint';h.textContent=hint;d.appendChild(h);chat.scrollTop=chat.scrollHeight;}
+
+input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,120)+'px';});
+
+document.getElementById('btnImg').addEventListener('click',()=>document.getElementById('file').click());
+document.getElementById('file').addEventListener('change',e=>{
+  for(const f of e.target.files){
+    pendingFiles.push({name:f.name,type:f.type,size:f.size});
+    filetag.style.display='block';
+    filetag.textContent='📎 '+pendingFiles.map(x=>x.name).join('、')+' — 图片暂记文件名,请在输入框补一句口述';
+  }
+  e.target.value='';
+});
+
+document.getElementById('btnVoice').addEventListener('click',()=>{
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){addMsg('当前浏览器不支持语音输入,请打字。','ai');return;}
+  const sr=new SR();sr.lang='zh-CN';sr.interimResults=false;
+  sr.onresult=e=>{input.value+=e.results[0][0].transcript;input.dispatchEvent(new Event('input'));};
+  sr.start();
+});
+
+async function send(){
+  const text=input.value.trim();
+  if(!text&&!pendingFiles.length)return;
+  addMsg(text||'(图片)', 'me');
+  input.value='';input.style.height='auto';
+  const files=pendingFiles.slice();pendingFiles=[];filetag.style.display='none';
+  const d=addMsg('…','ai','处理中');
+  try{
+    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:text,links:[],files})});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    d.querySelector('span:not(.tag)').textContent=j.reply||'(空)';
+    if(j.report)d.querySelector('.tag').textContent=j.report;
+  }catch(err){
+    d.querySelector('span:not(.tag)').textContent='出错了:'+err.message;
+  }
+}
+document.getElementById('btnSend').addEventListener('click',send);
+input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
