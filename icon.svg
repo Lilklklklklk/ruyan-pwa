@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f1115"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#4f9cf9" stroke-width="18" opacity="0.85"/>
+  <text x="256" y="330" font-size="220" text-anchor="middle" fill="#e8eaf0" font-family="'PingFang SC','Microsoft YaHei',sans-serif">如</text>
+</svg>
