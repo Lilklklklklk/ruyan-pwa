@@ -109,6 +109,28 @@ document.getElementById('btnVoice').addEventListener('click',()=>{
   sr.start();
 });
 
+// 调用后端。502/503/5xx 是函数实例被回收的典型表现,自动重试一次就够了;
+// 4xx 是请求本身的问题,重试没用,直接抛。
+async function callApi(payload){
+  let lastErr=null;
+  for(let i=0;i<2;i++){
+    if(i>0)await new Promise(s=>setTimeout(s,1500));
+    try{
+      const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)});
+      const j=await r.json().catch(()=>({}));
+      if(r.ok)return j;
+      const e=Object.assign(new Error(j.error||('HTTP '+r.status)),{fatal:r.status<500});
+      if(e.fatal)throw e;
+      lastErr=e;
+    }catch(err){
+      if(err.fatal)throw err;
+      lastErr=err;
+    }
+  }
+  throw lastErr||new Error('网络异常,请再发一次');
+}
+
 async function send(){
   const text=input.value.trim();
   if(!text&&!pendingFiles.length)return;
@@ -120,10 +142,7 @@ async function send(){
   filetag.style.display='none';
   const d=addMsg('…','ai','处理中');
   try{
-    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:text,links:[],files,history:history.slice(-8)})});
-    const j=await r.json();
-    if(!r.ok)throw new Error(j.error||('HTTP '+r.status));
+    const j=await callApi({message:text,links:[],files,history:history.slice(-8)});
     const reply=j.reply||'(空)';
     d.querySelector('span:not(.tag)').textContent=reply;
     if(j.report)d.querySelector('.tag').textContent=j.report;
